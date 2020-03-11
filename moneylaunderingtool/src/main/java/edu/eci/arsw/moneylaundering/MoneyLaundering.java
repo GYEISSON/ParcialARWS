@@ -19,7 +19,8 @@ public class MoneyLaundering
     private int amountOfFilesTotal;
     private AtomicInteger amountOfFilesProcessed;
     private static ArrayList<Thread> threads = new ArrayList<Thread>();
-
+    private static Object monitor = new Object();
+    private static boolean pause;
     public MoneyLaundering()
     {
         transactionAnalyzer = new TransactionAnalyzer();
@@ -29,16 +30,16 @@ public class MoneyLaundering
 
     public void processTransactionData(int threadsNumber)
     {
-    	//System.out.println(amountOfFilesProcessed.get());
+
         amountOfFilesProcessed.set(0);
         List<File> transactionFiles = getTransactionFileList();
         
         amountOfFilesTotal = transactionFiles.size();
-        //System.out.println(transactionFiles.size()+"numero de transactionfiles");
+        
         int numFile=1;
         for(File transactionFile : transactionFiles)
         {            
-        	//System.out.println("reading");
+        	
             List<Transaction> transactions = transactionReader.readTransactionsFromFile(transactionFile);
             int delta=transactions.size()/threadsNumber;
             for(int thread=0;thread<threadsNumber;thread++){
@@ -47,16 +48,16 @@ public class MoneyLaundering
             	threads.add( new Thread(() -> segmentTransactionFile(i,j,transactions)));
             	threads.get(thread).start();
             }
+ 
             try {
-            	while(true) {
-            		if(terminado(threads)==true) break;
-            	}
-            	threads.clear();
-                Thread.sleep(10);
-                
+            	for(Thread t : threads) {
+                	t.join();
+                }
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
+            
+            threads.clear();
             amountOfFilesProcessed.incrementAndGet();
             System.out.println("File "+(numFile++));
         }
@@ -78,6 +79,16 @@ public class MoneyLaundering
     public void segmentTransactionFile(int i, int j,List<Transaction> transactions) {
     	for(int x=i;x<j;x++)
         {
+    		synchronized(monitor) {
+    			if(pause) {
+    				try {
+    					monitor.wait();
+    				} catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+    			}
+    			
+    		}
     		
             transactionAnalyzer.addTransaction(transactions.get(x));
         }
@@ -120,25 +131,35 @@ public class MoneyLaundering
         //ingrese  N en processTransactionData( N ) donde N es el numero de hilos 
         Thread processingThread = new Thread(() -> moneyLaundering.processTransactionData(100));
         processingThread.start();
+        pause=false;
         
-        //Thread processingThread1 = new Thread(() -> moneyLaundering.processTransactionData());
-        
-        //processingThread1.start();
+        /*
+        Thread processingThread1 = new Thread(() -> moneyLaundering.processTransactionData());
+        processingThread1.start();
+        */
         while(true)
         {
-        	//System.out.println("buscando");
+        	System.out.println("Los hilos estan "+ ((pause)?"detenidos":"activos"));
             Scanner scanner = new Scanner(System.in);
             String line = scanner.nextLine();
-            //stop();
             if(line.contains("exit"))
                 break;
-            String message = "Processed %d out of %d files.\nFound %d suspect accounts:\n%s";
-            List<String> offendingAccounts = moneyLaundering.getOffendingAccounts();
-            String suspectAccounts = offendingAccounts.stream().reduce("", (s1, s2)-> s1 + "\n"+s2);
-            message = String.format(message, moneyLaundering.amountOfFilesProcessed.get(), moneyLaundering.amountOfFilesTotal, offendingAccounts.size(), suspectAccounts);
-            System.out.println(message);
-            //line = scanner.nextLine();
-            //resume();
+            
+            if(pause) {
+            	pause=false;
+            	synchronized(monitor) {
+            		monitor.notifyAll();
+            	}
+	            
+            }else {
+            	pause = true;
+            	String message = "Processed %d out of %d files.\nFound %d suspect accounts:\n%s";
+	            List<String> offendingAccounts = moneyLaundering.getOffendingAccounts();
+	            String suspectAccounts = offendingAccounts.stream().reduce("", (s1, s2)-> s1 + "\n"+s2);
+	            message = String.format(message, moneyLaundering.amountOfFilesProcessed.get(), moneyLaundering.amountOfFilesTotal, offendingAccounts.size(), suspectAccounts);
+	            System.out.println(message);
+            }
+            
         }
 
     }
