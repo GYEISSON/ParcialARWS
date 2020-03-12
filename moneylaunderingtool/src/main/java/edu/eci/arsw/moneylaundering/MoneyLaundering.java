@@ -21,6 +21,7 @@ public class MoneyLaundering
     private static ArrayList<Thread> threads = new ArrayList<Thread>();
     private static Object monitor = new Object();
     private static boolean pause;
+
     public MoneyLaundering()
     {
         transactionAnalyzer = new TransactionAnalyzer();
@@ -59,22 +60,9 @@ public class MoneyLaundering
             
             threads.clear();
             amountOfFilesProcessed.incrementAndGet();
-            System.out.println("File "+(numFile++));
+            System.out.println("File "+(numFile++)+" finished.");
         }
     }
-    
-    public boolean terminado(ArrayList<Thread> threads) {
-    	boolean b=true;
-    	for(Thread t: threads) {
-    		
-    		if(t.getState()!=Thread.State.TERMINATED) {
-    			return false;
-    		}
-    	}
-    	return true;
-    }
-        
- 
     
     public void segmentTransactionFile(int i, int j,List<Transaction> transactions) {
     	for(int x=i;x<j;x++)
@@ -103,17 +91,13 @@ public class MoneyLaundering
     		try {
 				t.wait();
 			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
+
 				e.printStackTrace();
 			}
     	}
     	
     }
-    public static void resume(){
-    	for(Thread t: threads) {
-    		t.notify();
-    	}
-    }
+
     private List<File> getTransactionFileList()
     {
         List<File> csvFiles = new ArrayList<>();
@@ -129,15 +113,13 @@ public class MoneyLaundering
     {
         MoneyLaundering moneyLaundering = new MoneyLaundering();
         //ingrese  N en processTransactionData( N ) donde N es el numero de hilos 
-        Thread processingThread = new Thread(() -> moneyLaundering.processTransactionData(100));
+        Thread processingThread = new Thread(() -> moneyLaundering.processTransactionData(5));
         processingThread.start();
         pause=false;
         
-        /*
-        Thread processingThread1 = new Thread(() -> moneyLaundering.processTransactionData());
-        processingThread1.start();
-        */
-        while(true)
+        
+
+        while(processingThread.getState()!=Thread.State.TERMINATED)
         {
         	System.out.println("Los hilos estan "+ ((pause)?"detenidos":"activos"));
             Scanner scanner = new Scanner(System.in);
